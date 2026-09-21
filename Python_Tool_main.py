@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Python运行打包工具V1.0
+Python运行打包工具 V1.1
 
 """
 
@@ -19,8 +19,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-APP_VERSION = "1.0"
-APP_TITLE = f"Python运行打包工具V{APP_VERSION}"
+APP_VERSION = "1.1"
+APP_TITLE = f"Python运行打包工具 V{APP_VERSION}"
 DEFAULT_PYTHON = "3.8.20"
 
 # import 名称与 PyPI / uv 安装包名称不一致时，在这里做映射。
@@ -167,6 +167,7 @@ class UVToolApp:
         self.root.minsize(820, 580)
 
         self.file_path_var = tk.StringVar()
+        self.icon_path_var = tk.StringVar()
         self.deps_var = tk.StringVar()
         self.python_var = tk.StringVar(value=DEFAULT_PYTHON)
         self.no_console_var = tk.BooleanVar(value=True)
@@ -217,9 +218,20 @@ class UVToolApp:
 
         ttk.Label(
             config_frame,
-            text="支持空格/逗号分隔，可手动修改。V1.0 会过滤标准库、本地模块，并自动把 serial 映射为 pyserial。",
+            text=f"支持空格/逗号分隔，可手动修改。V{APP_VERSION} 会过滤标准库、本地模块，并自动把 serial 映射为 pyserial。",
             foreground="#666666",
         ).grid(row=2, column=1, columnspan=3, sticky="w", pady=(0, 4))
+
+        ttk.Label(config_frame, text="图标文件：").grid(row=3, column=0, sticky="e", padx=(0, 6), pady=4)
+        ttk.Entry(config_frame, textvariable=self.icon_path_var).grid(
+            row=3, column=1, columnspan=2, sticky="ew", pady=4
+        )
+        icon_buttons = ttk.Frame(config_frame)
+        icon_buttons.grid(row=3, column=3, padx=(8, 0), pady=4)
+        ttk.Button(icon_buttons, text="选择图标", command=self.browse_icon).pack(side=tk.LEFT)
+        ttk.Button(icon_buttons, text="清除图标", command=lambda: self.icon_path_var.set("")).pack(
+            side=tk.LEFT, padx=(6, 0)
+        )
 
         config_frame.columnconfigure(2, weight=1)
 
@@ -277,7 +289,7 @@ class UVToolApp:
         )
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
 
-        self.log("[*] Python运行打包工具V1.0 已启动。")
+        self.log(f"[*] Python运行打包工具V{APP_VERSION} 已启动。")
 
     # ---------------- 日志 / UI 线程安全 ----------------
 
@@ -390,6 +402,27 @@ class UVToolApp:
             self.log(f"已选择脚本: {file_path}")
             self.analyze_imports(file_path)
 
+    def browse_icon(self):
+        icon_path = filedialog.askopenfilename(
+            title="选择 EXE 图标",
+            filetypes=[("Windows 图标 (*.ico)", "*.ico")],
+        )
+        if icon_path:
+            self.icon_path_var.set(icon_path)
+
+    def validate_icon(self):
+        """空字符串表示默认图标；None 表示校验失败。"""
+        icon_path = self.icon_path_var.get().strip()
+        if not icon_path:
+            return ""
+        if Path(icon_path).suffix.lower() != ".ico":
+            messagebox.showerror("图标文件错误", "请选择 .ico 格式的图标文件。")
+            return None
+        if not os.path.isfile(icon_path):
+            messagebox.showerror("图标文件错误", f"图标文件不存在或不是文件：\n{icon_path}")
+            return None
+        return os.path.abspath(icon_path)
+
     # ---------------- 命令构造 ----------------
 
     def check_uv(self):
@@ -436,7 +469,7 @@ class UVToolApp:
 
         self.start_command(cmd, "运行脚本", script_path)
 
-    def cleanup_pack_artifacts(self, script_path):
+    def cleanup_pack_artifacts(self, script_path, icon_path=""):
         """
         打包成功后清理 PyInstaller 中间产物。
 
@@ -445,7 +478,7 @@ class UVToolApp:
         2. 当 build 已为空时，再删除空 build 目录；
         3. <脚本名>.spec 文件。
 
-        dist 目录和最终 EXE 不删除。
+        dist 目录、最终 EXE 和本次使用的 ICO 源文件不删除。
         """
         script = Path(script_path).resolve()
         workdir = script.parent
@@ -458,8 +491,19 @@ class UVToolApp:
         build_root = workdir / "build"
         target_build = build_root / stem
 
+        # 使用本次命令的图标快照，不读取用户可能已修改的输入框。
+        preserve_build = False
+        if icon_path:
+            try:
+                Path(icon_path).resolve().relative_to(target_build.resolve())
+                preserve_build = True
+            except ValueError:
+                pass
+
         try:
-            if target_build.exists():
+            if preserve_build:
+                warnings.append(f"构建目录包含用户选择的 ICO，已保留：{target_build}")
+            elif target_build.exists():
                 shutil.rmtree(target_build)
                 removed.append(str(target_build))
         except Exception as e:
@@ -500,9 +544,15 @@ class UVToolApp:
         if not script_path or not self.check_uv():
             return
 
+        icon_path = self.validate_icon()
+        if icon_path is None:
+            return
+
         pyinstaller_args = ["pyinstaller", "--onefile"]
         if self.no_console_var.get():
             pyinstaller_args.append("--noconsole")
+        if icon_path:
+            pyinstaller_args.append(f"--icon={icon_path}")
         pyinstaller_args.append(script_path)
 
         cmd = [
@@ -531,6 +581,12 @@ class UVToolApp:
         """后台执行命令；子进程输出以 bytes 读取，再自行解码，避免 Windows GBK 崩溃。"""
         self.safe_log(f"\n========== 开始 {action_name} ==========")
         self.safe_log(f"执行命令: {format_command(cmd_list)}")
+
+        icon_path = ""
+        if action_name == "打包 EXE":
+            icon_path = next((arg[len("--icon="):] for arg in cmd_list
+                              if arg.startswith("--icon=")), "")
+            self.safe_log(f"[*] EXE图标: {icon_path or '默认'}")
 
         workdir = os.path.dirname(os.path.abspath(script_path)) or None
         self.safe_log(f"工作目录: {workdir}\n")
@@ -563,7 +619,7 @@ class UVToolApp:
             if return_code == 0:
                 self.safe_log(f"\n========== {action_name} 成功完成! ==========\n")
                 if action_name == "打包 EXE":
-                    self.cleanup_pack_artifacts(script_path)
+                    self.cleanup_pack_artifacts(script_path, icon_path)
             else:
                 self.safe_log(f"\n========== {action_name} 异常退出 (代码: {return_code}) ==========\n")
 
