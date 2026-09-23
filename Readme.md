@@ -2,12 +2,12 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-uv-de5c3c)
-![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.1-brightgreen)
+![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.2-brightgreen)
 
 一个基于 **tkinter + [uv](https://docs.astral.sh/uv/)** 的轻量级 Python 脚本运行与打包工具。
 它能自动识别脚本依赖，并借助 uv 在隔离环境中完成依赖获取、脚本运行与 EXE 打包，让你彻底摆脱虚拟环境的管理烦恼。
 
-> 当前版本：**V1.1**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：**V1.2**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能特性
 

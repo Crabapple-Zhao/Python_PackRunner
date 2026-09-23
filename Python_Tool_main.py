@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Python运行打包工具 V1.1
+Python运行打包工具 V1.2
 
 """
 
@@ -14,14 +14,18 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+import tempfile
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 APP_TITLE = f"Python运行打包工具 V{APP_VERSION}"
 DEFAULT_PYTHON = "3.8.20"
+
+# 仅在选择自定义图标时注入，不修改目标脚本。
+TK_ICON_RUNTIME_HOOK = '# PyInstaller runtime hook: use the icon already embedded in the EXE.\nimport sys\nif sys.platform == "win32":\n    try:\n        import tkinter as tk\n    except ImportError:\n        pass\n    else:\n        original_init = tk.Tk.__init__\n        def init_with_exe_icon(self, *args, **kwargs):\n            original_init(self, *args, **kwargs)\n            if getattr(self, "_tkloaded", False):\n                try:\n                    self.iconbitmap(default=sys.executable)\n                    self.iconbitmap(sys.executable)\n                except (tk.TclError, OSError):\n                    pass\n        tk.Tk.__init__ = init_with_exe_icon\n'
 
 # import 名称与 PyPI / uv 安装包名称不一致时，在这里做映射。
 IMPORT_TO_PACKAGE = {
@@ -177,6 +181,12 @@ class UVToolApp:
         self.process_lock = threading.Lock()
 
         self._build_ui()
+        self._default_window_icon = (
+            sys.executable if os.name == "nt" and getattr(sys, "frozen", False) else ""
+        )
+        self._icon_preview_job = None
+        self._apply_window_icon(self._default_window_icon)
+        self.icon_path_var.trace_add("write", self._queue_icon_preview)
 
     # ---------------- UI ----------------
 
@@ -410,6 +420,33 @@ class UVToolApp:
         if icon_path:
             self.icon_path_var.set(icon_path)
 
+    def _apply_window_icon(self, icon_path):
+        """Windows 可直接读取 ICO 或当前 EXE 中由 --icon 嵌入的资源。"""
+        if os.name != "nt":
+            return False
+        try:
+            self.root.iconbitmap(default=icon_path)
+            self.root.iconbitmap(icon_path)
+            return True
+        except (tk.TclError, OSError) as exc:
+            self.log(f"[警告] 窗口图标加载失败，保留当前图标：{exc}")
+            return False
+
+    def _queue_icon_preview(self, *_):
+        # 同时支持文件选择和手工输入，避免每输入一个字符就加载图标。
+        if self._icon_preview_job is not None:
+            self.root.after_cancel(self._icon_preview_job)
+        self._icon_preview_job = self.root.after(250, self._preview_window_icon)
+
+    def _preview_window_icon(self):
+        self._icon_preview_job = None
+        icon_path = self.icon_path_var.get().strip()
+        if not icon_path:
+            self._apply_window_icon(self._default_window_icon)
+        elif Path(icon_path).suffix.lower() == ".ico" and os.path.isfile(icon_path):
+            self._apply_window_icon(os.path.abspath(icon_path))
+        # 未完成或无效的输入不打断编辑；打包前仍由 validate_icon 提示。
+
     def validate_icon(self):
         """空字符串表示默认图标；None 表示校验失败。"""
         icon_path = self.icon_path_var.get().strip()
@@ -580,7 +617,6 @@ class UVToolApp:
     def execute_command_thread(self, cmd_list, action_name, script_path):
         """后台执行命令；子进程输出以 bytes 读取，再自行解码，避免 Windows GBK 崩溃。"""
         self.safe_log(f"\n========== 开始 {action_name} ==========")
-        self.safe_log(f"执行命令: {format_command(cmd_list)}")
 
         icon_path = ""
         if action_name == "打包 EXE":
@@ -593,7 +629,17 @@ class UVToolApp:
 
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
+        hook_dir = None
         try:
+            if action_name == "打包 EXE" and icon_path:
+                # 临时钩子在整个打包进程结束后才清理；ICO 直接使用 EXE 内嵌资源。
+                hook_dir = tempfile.TemporaryDirectory(prefix="python_tool_icon_")
+                hook_path = Path(hook_dir.name) / "tk_window_icon.py"
+                hook_path.write_text(TK_ICON_RUNTIME_HOOK, encoding="utf-8")
+                cmd_list = list(cmd_list)
+                cmd_list[-1:-1] = ["--runtime-hook", str(hook_path)]
+                self.safe_log("[*] 已启用 Tkinter 窗口默认图标同步（无需修改目标脚本）。")
+            self.safe_log(f"执行命令: {format_command(cmd_list)}")
             process = subprocess.Popen(
                 cmd_list,
                 cwd=workdir,
@@ -628,6 +674,11 @@ class UVToolApp:
         except Exception as e:
             self.safe_log(f"\n[系统错误] 执行命令时发生异常：\n{type(e).__name__}: {e}\n")
         finally:
+            if hook_dir is not None:
+                try:
+                    hook_dir.cleanup()
+                except OSError as exc:
+                    self.safe_log(f"[警告] 图标临时钩子清理失败：{exc}")
             with self.process_lock:
                 self.current_process = None
             self.set_busy(False)
