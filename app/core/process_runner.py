@@ -86,5 +86,15 @@ class ProcessRunner:
             process = self._process
         if process is None:
             return False
+        if os.name == "nt":
+            completed = subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                check=False,
+            )
+            if completed.returncode == 0 or process.poll() is not None:
+                return True
         process.terminate()
         return True
