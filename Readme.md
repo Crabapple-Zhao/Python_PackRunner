@@ -2,12 +2,12 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-uv-de5c3c)
-![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.5-brightgreen)
+![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.6-brightgreen)
 
 一个基于 **tkinter + [uv](https://docs.astral.sh/uv/)** 的轻量级 Python 脚本运行与打包工具。
 它能自动识别脚本依赖，并借助 uv 在隔离环境中完成依赖获取、脚本运行与 EXE 打包，让你彻底摆脱虚拟环境的管理烦恼。
 
-> 当前版本：**V1.5**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：**V1.6**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能特性
 
@@ -19,7 +19,7 @@
 - **自定义 EXE 图标**：选择原始 `.ico` 文件，打包时自动加入 `--icon`；支持中文、空格及括号路径，清除后恢复默认图标
 - **多 Python 版本**：3.8.20 ~ 3.13 可选，默认 3.8.20，兼顾旧版 Windows 系统
 - **实时日志窗口**：内置控制台实时显示运行/打包输出，后台异步刷新，界面不卡顿
-- **任务控制**：支持中途停止任务、重新识别依赖、清空日志
+- **任务控制**：支持中途停止任务、重新识别依赖、清空日志；Windows 下停止任务时同步终止 uv/Python 进程树
 - **自动清理**：打包成功后自动删除 build 中间目录与 `.spec` 文件，保留 `dist`、最终 EXE 与所选 ICO 源文件；若 ICO 位于待清理构建目录内，则保留该目录并提示
 
 ## 环境要求

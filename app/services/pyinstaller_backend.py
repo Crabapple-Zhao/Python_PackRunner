@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, Iterator, List, Optional, Sequence
 
 from ..constants import TK_ICON_RUNTIME_HOOK
-from .uv_manager import build_uv_dependency_args
+from .uv_manager import build_uv_run_command
 
 
 def build_pack_command(
@@ -25,10 +25,12 @@ def build_pack_command(
     if icon_path:
         pyinstaller_args.append(f"--icon={icon_path}")
     pyinstaller_args.append(script_path)
-    return [
-        "uv", "run", "--python", python_version, "--with", "pyinstaller",
-        *build_uv_dependency_args(dependencies_text), *pyinstaller_args,
-    ]
+    return build_uv_run_command(
+        python_version=python_version,
+        dependencies_text=dependencies_text,
+        command_args=pyinstaller_args,
+        extra_packages=["pyinstaller"],
+    )
 
 
 @dataclass(frozen=True)

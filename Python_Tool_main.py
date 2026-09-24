@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Python运行打包工具 V1.5 启动入口。"""
+"""Python运行打包工具 V1.6 启动入口。"""
 
 from app.ui.main_window import UVToolApp, center_window, main
 
