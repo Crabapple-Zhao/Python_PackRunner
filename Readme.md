@@ -2,15 +2,20 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-uv-de5c3c)
-![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.6.1-brightgreen)
+![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V2.0.0-brightgreen)
 
 一个基于 **tkinter + [uv](https://docs.astral.sh/uv/)** 的轻量级 Python 脚本运行与打包工具。
 它能自动识别脚本依赖，并借助 uv 在隔离环境中完成依赖获取、脚本运行与 EXE 打包，让你彻底摆脱虚拟环境的管理烦恼。
 
-> 当前版本：**V1.6.1**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：**V2.0.0**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
+
+## 软件界面
+
+![Python运行打包工具 V2.0.0 软件界面](docs/images/python-tool-v2.0.0.png)
 
 ## 功能特性
 
+- **现代化界面**：采用蓝白灰卡片式布局与自绘圆角控件，统一输入框、按钮、下拉选择、状态面板和进度提示，并适配窗口缩放与 Windows 高 DPI 显示
 - **自动依赖识别**：基于 `ast` 解析 import 语句，自动提取第三方依赖；智能过滤标准库（兼容 Python 3.8+）以及脚本同目录下的本地模块/包
 - **路径粘贴与目录识别**：脚本路径支持直接粘贴文件或目录；目录仅扫描当前层级，优先自动选中明确的 `main.py`/唯一 main 相关脚本，其他多脚本情况提供列表选择
 - **包名智能映射**：自动将 import 名映射为正确的安装包名（如 `serial → pyserial`、`PIL → Pillow`），避免"找不到包"的问题
@@ -18,8 +23,8 @@
 - **一键打包 EXE**：自动注入 pyinstaller 及所需依赖，打包为单文件 EXE；可选隐藏控制台窗口
 - **自定义 EXE 图标**：选择原始 `.ico` 文件，打包时自动加入 `--icon`；所选图标仅用于目标 EXE，不会改变工具自身图标；支持中文、空格及括号路径，清除后恢复默认打包图标
 - **多 Python 版本**：3.8.20 ~ 3.13 可选，默认 3.8.20，兼顾旧版 Windows 系统
-- **实时日志窗口**：内置控制台实时显示运行/打包输出，后台异步刷新，界面不卡顿
-- **任务控制**：支持中途停止任务、重新识别依赖、清空日志；Windows 下停止任务时同步终止 uv/Python 进程树
+- **实时日志窗口**：深色控制台实时显示运行/打包输出，区分信息、运行、成功、警告及错误状态，支持清空和复制日志，后台异步刷新且界面不卡顿
+- **任务控制**：支持中途停止任务、重新识别依赖，并通过状态面板和圆角进度条反馈当前状态；Windows 下停止任务时同步终止 uv/Python 进程树
 - **自动清理**：打包成功后自动删除 build 中间目录与 `.spec` 文件，保留 `dist`、最终 EXE 与所选 ICO 源文件；若 ICO 位于待清理构建目录内，则保留该目录并提示
 
 ## 环境要求
@@ -56,19 +61,23 @@ python Python_Tool_main.py
 2. 输入目录时仅扫描当前一级：唯一脚本、精确的 `main.py` 或唯一 main 相关脚本会自动选中，其余多脚本情况会弹出列表供选择；自动选中不会运行脚本；
 3. 选中脚本后会自动分析 import 并填入第三方依赖；依赖输入框支持空格/逗号/分号分隔，可手动增删改，点击 **"重新识别"** 可随时重新分析；
 4. 按需选择 Python 版本；如需命令行窗口，取消勾选 **"打包 EXE 时隐藏控制台"**（默认开启）；
-5. 点击 **"▶ 运行脚本 (Run)"** 测试脚本；
+5. 点击 **"运行脚本"** 测试脚本；
 6. 如需自定义 EXE 图标，点击 **"选择图标"** 选择 `.ico` 文件，也可在 **"图标文件"** 输入框填写路径；取消选择保持原设置，点击 **"清除图标"** 恢复默认图标。图标仅用于打包，不影响运行脚本；
-7. 验证无误后点击 **"📦 打包为 EXE"**，生成的 EXE 将保存在目标脚本同目录下的 `dist` 文件夹中。
+7. 验证无误后点击 **"打包为 EXE"**，生成的 EXE 将保存在目标脚本同目录下的 `dist` 文件夹中。
 
 ## 项目结构
 
 ```text
 GitHub-main/
 ├─ .gitignore                       # Python/PyInstaller 生成文件忽略规则
+├─ docs/images/                     # README 使用的软件界面预览图
 ├─ Python_Tool_main.py              # 程序启动入口
 └─ app/
    ├─ constants.py                  # 版本及静态配置
-   ├─ ui/main_window.py             # Tkinter 主窗口与流程编排
+   ├─ ui/
+   │  ├─ main_window.py             # Tkinter 主窗口与流程编排
+   │  ├─ widgets.py                 # 自绘圆角控件与现代化交互组件
+   │  └─ assets.py                  # 工具自身的内嵌界面图标资源
    ├─ core/
    │  ├─ dependency_analyzer.py     # Python 依赖分析
    │  ├─ process_runner.py          # 后台子进程管理
