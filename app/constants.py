@@ -1,6 +1,6 @@
 """Application-wide constants and static compatibility data."""
 
-APP_VERSION = "1.6"
+APP_VERSION = "1.6.1"
 APP_TITLE = f"Python运行打包工具 V{APP_VERSION}"
 DEFAULT_PYTHON = "3.8.20"
 

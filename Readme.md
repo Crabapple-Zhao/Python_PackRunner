@@ -2,12 +2,12 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-uv-de5c3c)
-![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.6-brightgreen)
+![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V1.6.1-brightgreen)
 
 一个基于 **tkinter + [uv](https://docs.astral.sh/uv/)** 的轻量级 Python 脚本运行与打包工具。
 它能自动识别脚本依赖，并借助 uv 在隔离环境中完成依赖获取、脚本运行与 EXE 打包，让你彻底摆脱虚拟环境的管理烦恼。
 
-> 当前版本：**V1.6**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：**V1.6.1**。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能特性
 
@@ -16,7 +16,7 @@
 - **包名智能映射**：自动将 import 名映射为正确的安装包名（如 `serial → pyserial`、`PIL → Pillow`），避免"找不到包"的问题
 - **uv 无缝集成**：通过 `uv run` 在隔离环境中动态获取依赖并执行脚本，不污染系统环境
 - **一键打包 EXE**：自动注入 pyinstaller 及所需依赖，打包为单文件 EXE；可选隐藏控制台窗口
-- **自定义 EXE 图标**：选择原始 `.ico` 文件，打包时自动加入 `--icon`；支持中文、空格及括号路径，清除后恢复默认图标
+- **自定义 EXE 图标**：选择原始 `.ico` 文件，打包时自动加入 `--icon`；所选图标仅用于目标 EXE，不会改变工具自身图标；支持中文、空格及括号路径，清除后恢复默认打包图标
 - **多 Python 版本**：3.8.20 ~ 3.13 可选，默认 3.8.20，兼顾旧版 Windows 系统
 - **实时日志窗口**：内置控制台实时显示运行/打包输出，后台异步刷新，界面不卡顿
 - **任务控制**：支持中途停止任务、重新识别依赖、清空日志；Windows 下停止任务时同步终止 uv/Python 进程树
