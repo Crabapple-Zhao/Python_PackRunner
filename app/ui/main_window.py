@@ -42,12 +42,10 @@ class UVToolApp:
         self._selected_script_path = ""
 
         self._build_ui()
-        self._default_window_icon = (
+        tool_window_icon = (
             sys.executable if os.name == "nt" and getattr(sys, "frozen", False) else ""
         )
-        self._icon_preview_job = None
-        self._apply_window_icon(self._default_window_icon)
-        self.icon_path_var.trace_add("write", self._queue_icon_preview)
+        self._apply_tool_window_icon(tool_window_icon)
 
     # ---------------- UI ----------------
 
@@ -390,7 +388,8 @@ class UVToolApp:
         if icon_path:
             self.icon_path_var.set(icon_path)
 
-    def _apply_window_icon(self, icon_path):
+    def _apply_tool_window_icon(self, icon_path):
+        """Set this tool's own icon independently from the target EXE icon."""
         if os.name != "nt":
             return False
         try:
@@ -400,19 +399,6 @@ class UVToolApp:
         except (tk.TclError, OSError) as exc:
             self.log(f"[警告] 窗口图标加载失败，保留当前图标：{exc}")
             return False
-
-    def _queue_icon_preview(self, *_):
-        if self._icon_preview_job is not None:
-            self.root.after_cancel(self._icon_preview_job)
-        self._icon_preview_job = self.root.after(250, self._preview_window_icon)
-
-    def _preview_window_icon(self):
-        self._icon_preview_job = None
-        icon_path = self.icon_path_var.get().strip()
-        if not icon_path:
-            self._apply_window_icon(self._default_window_icon)
-        elif Path(icon_path).suffix.lower() == ".ico" and os.path.isfile(icon_path):
-            self._apply_window_icon(os.path.abspath(icon_path))
 
     def validate_icon(self):
         icon_path = self.icon_path_var.get().strip()
