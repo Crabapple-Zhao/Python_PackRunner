@@ -1,6 +1,6 @@
 """Application-wide constants and static compatibility data."""
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 APP_TITLE = f"Python运行打包工具 V{APP_VERSION}"
 DEFAULT_PYTHON = "3.8.20"
 
@@ -40,22 +40,28 @@ STD_LIBS_FALLBACK = {
     "xmlrpc", "zipapp", "zipfile", "zipimport", "zlib", "zoneinfo",
 }
 
-TK_ICON_RUNTIME_HOOK = '''# PyInstaller runtime hook: use the icon already embedded in the EXE.
+TK_ICON_RESOURCE_NAME = "python_tool_window_icon.ico"
+
+TK_ICON_RUNTIME_HOOK = f'''# PyInstaller runtime hook: load a bundled ICO for Tk windows.
+import os
 import sys
-if sys.platform == "win32":
+import warnings
+if sys.platform == "win32" and hasattr(sys, "_MEIPASS"):
     try:
         import tkinter as tk
     except ImportError:
         pass
     else:
+        runtime_ico_path = os.path.join(sys._MEIPASS, {TK_ICON_RESOURCE_NAME!r})
         original_init = tk.Tk.__init__
-        def init_with_exe_icon(self, *args, **kwargs):
+        def init_with_runtime_icon(self, *args, **kwargs):
             original_init(self, *args, **kwargs)
             if getattr(self, "_tkloaded", False):
                 try:
-                    self.iconbitmap(default=sys.executable)
-                    self.iconbitmap(sys.executable)
-                except (tk.TclError, OSError):
-                    pass
-        tk.Tk.__init__ = init_with_exe_icon
+                    self.iconbitmap(default=runtime_ico_path)
+                    self.iconbitmap(runtime_ico_path)
+                except (tk.TclError, OSError) as exc:
+                    warnings.warn("Unable to set bundled Tk window icon: " + str(exc),
+                                  RuntimeWarning)
+        tk.Tk.__init__ = init_with_runtime_icon
 '''

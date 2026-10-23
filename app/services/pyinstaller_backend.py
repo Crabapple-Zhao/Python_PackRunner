@@ -1,5 +1,6 @@
 """PyInstaller command, runtime-hook, and artifact-cleanup helpers."""
 
+import os
 import shutil
 import tempfile
 from contextlib import contextmanager
@@ -7,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, List, Optional, Sequence
 
-from ..constants import TK_ICON_RUNTIME_HOOK
+from ..constants import TK_ICON_RESOURCE_NAME, TK_ICON_RUNTIME_HOOK
 from .uv_manager import build_uv_run_command
 
 
@@ -82,23 +83,28 @@ def cleanup_pack_artifacts(script_path: str, icon_path: str = "") -> CleanupResu
 @contextmanager
 def tkinter_icon_runtime_hook(
     command: Sequence[str],
-    enabled: bool,
+    icon_path: str = "",
     warning_callback: Optional[Callable[[str], None]] = None,
 ) -> Iterator[List[str]]:
-    """在 PyInstaller 命令中临时注入 Tk 窗口图标 runtime hook。"""
+    """在整个构建期间保留 ICO 副本和 Tk 窗口图标 runtime hook。"""
     actual_command = list(command)
-    if not enabled:
+    if not icon_path:
         yield actual_command
         return
     hook_dir = tempfile.TemporaryDirectory(prefix="python_tool_icon_")
     try:
+        runtime_icon = Path(hook_dir.name) / TK_ICON_RESOURCE_NAME
+        shutil.copyfile(icon_path, runtime_icon)
         hook_path = Path(hook_dir.name) / "tk_window_icon.py"
         hook_path.write_text(TK_ICON_RUNTIME_HOOK, encoding="utf-8")
-        actual_command[-1:-1] = ["--runtime-hook", str(hook_path)]
+        actual_command[-1:-1] = [
+            "--add-data", f"{runtime_icon}{os.pathsep}.",
+            "--runtime-hook", str(hook_path),
+        ]
         yield actual_command
     finally:
         try:
             hook_dir.cleanup()
         except OSError as exc:
             if warning_callback is not None:
-                warning_callback(f"[警告] 图标临时钩子清理失败：{exc}")
+                warning_callback(f"[警告] 图标临时资源清理失败：{exc}")

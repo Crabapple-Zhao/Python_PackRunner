@@ -1364,7 +1364,7 @@ class UVToolApp:
         if action_name == "打包 EXE" and icon_path:
             context = partial(
                 tkinter_icon_runtime_hook,
-                enabled=True,
+                icon_path=icon_path,
                 warning_callback=self.safe_log,
             )
         self._stop_requested = False
