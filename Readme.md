@@ -2,18 +2,18 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-uv-de5c3c)
-![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V2.0.1-brightgreen)
+![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V2.0.2-brightgreen)
 
 一个基于 **tkinter + [uv](https://docs.astral.sh/uv/)** 的轻量级 Python 脚本运行与打包工具。
 它能自动识别脚本依赖，并借助 uv 在隔离环境中完成依赖获取、脚本运行与 EXE 打包，让你彻底摆脱虚拟环境的管理烦恼。
 
-> 当前版本：**V2.0.1**。修复 Windows 10 下打包后的 Tkinter 软件仍显示默认羽毛图标的问题。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：**V2.0.2**。新增工具 ICO 资源，更新工具自身图标配色，并保留 V2.0.1 的 Windows 10 Tkinter 图标修复。历史版本变化请查看 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 软件界面
 
-![Python运行打包工具软件界面（V2.0.0 布局示意）](docs/images/python-tool-v2.0.0.png)
+![Python运行打包工具 V2.0.2 实际运行界面](docs/images/python-tool-v2.0.2.png)
 
-V2.0.1 沿用 V2.0.0 的界面布局，上图为 V2.0.0 界面示意。
+上图为 V2.0.2 实际运行截图，展示更新后的工具图标配色与主窗口布局。
 
 ## 功能特性
 
@@ -57,6 +57,12 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 python Python_Tool_main.py
 ```
 
+### 工具自身图标
+
+工具 ICO 位于 [`docs/ico/Python_Tool_A2.ico`](docs/ico/Python_Tool_A2.ico)，采用蓝黄主体与深灰色扳手配色，包含 16×16 至 256×256 的多尺寸图像。源码运行时使用仓库内的 ICO 设置窗口图标；界面中的工具标识及内嵌 PNG 已同步为同一配色，内嵌 PNG 在单文件运行时无需额外资源文件。
+
+打包本工具时，请将 **图标文件** 设为上述 ICO，使 EXE 文件图标与窗口、任务栏图标保持一致。该资源与为其他目标脚本选择的 ICO 相互独立；选择、输入或清除目标 ICO 不会更改工具自身图标。已有工具 EXE 需要重新打包后才会包含新图标。
+
 ## 使用说明
 
 1. 点击 **"浏览..."** 选择目标 `.py` 脚本，或在脚本路径框直接粘贴 `.py` 文件/目录路径；按 Enter、点击 **"识别路径"**，或直接点击运行/打包按钮均会解析路径；
@@ -67,13 +73,13 @@ python Python_Tool_main.py
 6. 如需自定义图标，点击 **"选择图标"** 选择 `.ico` 文件，也可在 **"图标文件"** 输入框填写路径；打包时设置 EXE 文件图标，并自动为 Tkinter 窗口设置默认图标。取消选择保持原设置，点击 **"清除图标"** 恢复默认打包行为。图标设置不影响直接运行脚本或工具自身图标；
 7. 验证无误后点击 **"打包为 EXE"**，生成的 EXE 将保存在目标脚本同目录下的 `dist` 文件夹中。
 
-### V2.0.1 图标修复与升级说明
+### Tkinter 图标修复与升级说明（V2.0.1 起）
 
 V2.0.0 及更早版本在 Windows 10 上可能出现：桌面和资源管理器中的 EXE 图标正确，但打开后的 Tkinter 窗口左上角、任务栏仍显示默认羽毛图标。
 
-V2.0.1 保留 PyInstaller `--icon`，同时将所选 ICO 的副本作为运行时资源打入程序；窗口创建时从程序解包目录加载实际的 `.ico` 文件，不再让 Tk 直接从 EXE 读取图标。继承 `tk.Tk` 的目标软件无需主动调用 `iconbitmap` 或 `iconphoto`；目标软件后续自行设置图标时，仍以其自身设置为准。
+自 V2.0.1 起保留 PyInstaller `--icon`，同时将所选 ICO 的副本作为运行时资源打入程序；窗口创建时从程序解包目录加载实际的 `.ico` 文件，不再让 Tk 直接从 EXE 读取图标。继承 `tk.Tk` 的目标软件无需主动调用 `iconbitmap` 或 `iconphoto`；目标软件后续自行设置图标时，仍以其自身设置为准。
 
-**升级打包工具不会改变已经生成的 EXE。** 请使用 V2.0.1 工具或当前源码，重新选择目标脚本和 ICO 打包，再将新生成的 EXE 放到目标 Windows 系统验证。无需修改目标软件源码，也无需添加 Pillow、CustomTkinter 等运行依赖。
+**升级打包工具不会改变已经生成的 EXE。** 请使用 V2.0.1 及以上版本工具或当前源码，重新选择目标脚本和 ICO 打包，再将新生成的 EXE 放到目标 Windows 系统验证。无需修改目标软件源码，也无需添加 Pillow、CustomTkinter 等运行依赖。
 
 ## 项目结构
 
@@ -81,6 +87,7 @@ V2.0.1 保留 PyInstaller `--icon`，同时将所选 ICO 的副本作为运行�
 GitHub-main/
 ├─ .gitignore                       # Python/PyInstaller 生成文件忽略规则
 ├─ docs/images/                     # README 使用的软件界面预览图
+├─ docs/ico/                        # 工具自身的多尺寸 ICO 资源
 ├─ Python_Tool_main.py              # 程序启动入口
 └─ app/
    ├─ constants.py                  # 版本及静态配置

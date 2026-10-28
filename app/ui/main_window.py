@@ -1287,10 +1287,10 @@ class UVToolApp:
         if getattr(sys, "frozen", False):
             return sys.executable
         source_icon = (
-            Path(__file__).resolve().parents[3]
-            / "Document"
-            / "ico图标文件"
-            / "Python_Tool_MultiSize.ico"
+            Path(__file__).resolve().parents[2]
+            / "docs"
+            / "ico"
+            / "Python_Tool_A2.ico"
         )
         return str(source_icon) if source_icon.is_file() else ""
 
