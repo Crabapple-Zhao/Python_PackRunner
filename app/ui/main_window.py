@@ -4,8 +4,8 @@ import os
 import sys
 import time
 import tkinter as tk
-import math
 from functools import partial
+from math import ceil
 from pathlib import Path
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
@@ -20,11 +20,15 @@ from ..core.script_locator import (
 from ..services.pyinstaller_backend import (
     build_pack_command,
     cleanup_pack_artifacts,
+    resource_build_context,
     tkinter_icon_runtime_hook,
 )
 from ..services.uv_manager import build_run_command, is_uv_available
+from ..services.resources import validate_resources
 from ..utils.command import format_command
 from .assets import APP_ICON_PNG
+from .drawing import draw_icon
+from .resource_panel import ResourcePanel
 from .widgets import (
     RoundedButton,
     RoundedEntry,
@@ -81,16 +85,16 @@ class UVToolApp:
         screen_height = self.root.winfo_screenheight()
         # Keep a compact desktop footprint while respecting the available
         # screen area on smaller displays.
-        window_width = min(round(900 * scaling), max(820, screen_width - 80))
-        window_height = min(round(690 * scaling), max(620, screen_height - 80))
+        window_width = min(round(1200 * scaling), max(1180, screen_width - 80))
+        window_height = min(round(720 * scaling), max(640, screen_height - 80))
         self.window_width = window_width
         self.window_height = window_height
-        self.compact_ui = window_width <= round(900 * scaling)
+        self.compact_ui = True
         self.form_action_width = 100 if self.compact_ui else FORM_ACTION_WIDTH
         self.form_control_height = 30 if self.compact_ui else FORM_CONTROL_HEIGHT
         self.root.minsize(
-            min(round(820 * scaling), window_width),
-            min(round(620 * scaling), window_height),
+            min(round(1180 * self.geometry_scale), window_width),
+            min(round(640 * self.geometry_scale), window_height),
         )
         center_window(self.root, window_width, window_height)
 
@@ -101,6 +105,7 @@ class UVToolApp:
         self.no_console_var = tk.BooleanVar(value=True)
         self.status_var = tk.StringVar(value="就绪")
         self.process_runner = ProcessRunner()
+        self.resource_mappings = []
         self._selected_script_path = ""
         self._stop_requested = False
 
@@ -123,6 +128,11 @@ class UVToolApp:
         self.mono_font_family = families.get(
             "cascadia mono", families.get("consolas", "Courier New")
         )
+        # Fit both the native DPI-scaled text and the icon inside form buttons.
+        metrics = tkfont.Font(root=self.root, font=(self.ui_font_family, 9))
+        icon_size = min(self._px(self.form_control_height)-10, round(metrics.metrics("linespace")*0.95))
+        minimum_width = metrics.measure("重新识别") + icon_size + max(5, round(icon_size*0.3)) + 12
+        self.form_action_width = max(self.form_action_width, ceil(minimum_width/self.geometry_scale))
 
         style = ttk.Style(self.root)
         if "clam" in style.theme_names():
@@ -143,7 +153,7 @@ class UVToolApp:
             fieldbackground=COLORS["card"],
             foreground=COLORS["text"],
             bordercolor=COLORS["border"],
-            rowheight=30,
+            rowheight=max(self._px(30), metrics.metrics("linespace")+self._px(8)),
             font=(self.ui_font_family, 9),
         )
         style.configure(
@@ -279,131 +289,25 @@ class UVToolApp:
     def _section_icon(self, parent, kind):
         if not kind:
             return None
-        size = self._px(
-            ICON_SIZES["section"]["compact" if self.compact_ui else "normal"]
-        )
-        canvas = tk.Canvas(
-            parent,
-            width=size,
-            height=size,
-            bg=COLORS["card"],
-            highlightthickness=0,
-            bd=0,
-        )
-        # All section icons share one 42px reference grid and one visual
-        # weight, so folder/gear/terminal do not look like unrelated assets.
-        scale = size / 42.0
-        stroke = max(1, self._px(2))
-        if kind == "folder":
-            canvas.create_polygon(
-                5 * scale, 14 * scale,
-                5 * scale, 33 * scale,
-                36 * scale, 33 * scale,
-                38 * scale, 17 * scale,
-                19 * scale, 17 * scale,
-                15 * scale, 13 * scale,
-                5 * scale, 13 * scale,
-                fill="",
-                outline=COLORS["primary"],
-                width=stroke,
-            )
-            canvas.create_line(
-                5 * scale, 18 * scale, 38 * scale, 18 * scale,
-                fill=COLORS["primary"], width=stroke,
-            )
-        elif kind == "gear":
-            center = 21 * scale
-            points = []
-            for index in range(32):
-                angle = -math.pi / 2 + index * math.pi / 16
-                radius = 19 if index % 4 in (0, 1) else 14
-                points.extend(
-                    (
-                        center + math.cos(angle) * radius * scale,
-                        center + math.sin(angle) * radius * scale,
-                    )
-                )
-            canvas.create_polygon(
-                *points,
-                fill=COLORS["primary"], outline="",
-            )
-            canvas.create_oval(
-                12 * scale, 12 * scale, 30 * scale, 30 * scale,
-                fill=COLORS["card"], outline="",
-            )
-        else:
-            draw_rounded_rectangle(
-                canvas,
-                4 * scale, 8 * scale, 38 * scale, 34 * scale,
-                6 * scale,
-                fill="#14243F", outline="", tag="terminal_icon",
-            )
-            canvas.create_text(
-                21 * scale, 21 * scale,
-                text=">_", fill="#FFFFFF",
-                font=(self.mono_font_family, 11, "bold"),
-            )
+        size = self._px(ICON_SIZES["section"]["compact" if self.compact_ui else "normal"])
+        canvas = tk.Canvas(parent, width=size, height=size, bg=COLORS["card"],
+                           highlightthickness=0, bd=0)
+        draw_icon(canvas, kind if kind in ("folder", "gear") else "terminal",
+                  size/2, size/2, size, COLORS["primary"], "section_icon")
         return canvas
 
     def _form_icon(self, parent, kind, background=None):
-        bg = background or parent.cget("bg")
-        icon_size = self._px(
-            ICON_SIZES["field"]["compact" if self.compact_ui else "normal"]
-        )
-        canvas = tk.Canvas(
-            parent,
-            width=icon_size,
-            height=icon_size,
-            bg=bg,
-            highlightthickness=0,
-            bd=0,
-        )
-        if kind == "python":
-            center = icon_size / 2
-            outer_radius = icon_size * 0.43
-            inner_radius = icon_size * 0.30
-            yellow_radius = icon_size * 0.20
-            canvas.create_oval(
-                center - outer_radius, center - outer_radius,
-                center + outer_radius, center + outer_radius,
-                fill=COLORS["primary"], outline="",
-            )
-            canvas.create_oval(
-                center - inner_radius, center - inner_radius,
-                center + inner_radius, center + inner_radius,
-                fill=bg, outline="",
-            )
-            canvas.create_oval(
-                center - yellow_radius, center - yellow_radius,
-                center + yellow_radius, center + yellow_radius,
-                fill="#E3A91A", outline="",
-            )
-        elif kind == "package":
-            s = icon_size / 26.0
-            canvas.create_polygon(
-                13*s, 3*s, 23*s, 8*s, 13*s, 13*s, 3*s, 8*s,
-                fill=COLORS["primary"], outline="",
-            )
-            canvas.create_polygon(
-                3*s, 9*s, 12*s, 14*s, 12*s, 24*s, 3*s, 19*s,
-                fill="#2A8CFF", outline="",
-            )
-            canvas.create_polygon(
-                13*s, 14*s, 23*s, 9*s, 23*s, 19*s, 13*s, 24*s,
-                fill="#0068DE", outline="",
-            )
-        else:
-            s = icon_size / 26.0
-            canvas.create_rectangle(3*s, 5*s, 23*s, 21*s, fill=COLORS["primary"], outline="")
-            canvas.create_oval(16*s, 8*s, 20*s, 12*s, fill="#FFFFFF", outline="")
-            canvas.create_polygon(5*s, 19*s, 10*s, 13*s, 14*s, 17*s, 17*s, 14*s, 22*s, 19*s, fill="#FFFFFF", outline="")
+        size = self._px(ICON_SIZES["field"]["compact" if self.compact_ui else "normal"])
+        canvas = tk.Canvas(parent, width=size, height=size,
+                           bg=background or parent.cget("bg"), highlightthickness=0, bd=0)
+        draw_icon(canvas, kind, size/2, size/2, size, COLORS["primary"], "field_icon")
         return canvas
 
     def _create_checkbox(self, parent, text, variable, background=None):
         bg = background or COLORS["card"]
         container = tk.Frame(parent, bg=bg, cursor="hand2")
         box = tk.Canvas(
-            container, width=18, height=18, bg=bg,
+            container, width=self._px(18), height=self._px(18), bg=bg,
             highlightthickness=0, bd=0, cursor="hand2",
         )
         box.pack(side=tk.LEFT)
@@ -418,19 +322,15 @@ class UVToolApp:
         label.pack(side=tk.LEFT, padx=(5, 0))
 
         def refresh(*_):
-            box.delete("all")
             selected = bool(variable.get())
-            box.create_rectangle(
-                2, 2, 18, 18,
-                fill=COLORS["primary"] if selected else bg,
-                outline=COLORS["primary"] if selected else COLORS["border"],
-                width=1,
-            )
+            size = self._px(18)
+            draw_rounded_rectangle(
+                box, 1, 1, size-1, size-1, self._px(3),
+                COLORS["primary"] if selected else bg,
+                COLORS["primary"] if selected else COLORS["border"], tag="checkbox")
+            box.delete("check")
             if selected:
-                box.create_line(
-                    5, 10, 9, 14, 16, 6,
-                    fill="#FFFFFF", width=2, capstyle=tk.ROUND, joinstyle=tk.ROUND,
-                )
+                draw_icon(box, "check", size/2, size/2, size-3, "#FFFFFF", "check")
 
         def toggle(_event=None):
             variable.set(not bool(variable.get()))
@@ -443,18 +343,25 @@ class UVToolApp:
         return container
 
     def _build_ui(self):
-        main = tk.Frame(self.root, bg=COLORS["window"])
-        main.pack(
+        outer = tk.Frame(self.root, bg=COLORS["window"])
+        self.form_container = outer
+        outer.pack(
             fill=tk.BOTH, expand=True,
             padx=8 if self.compact_ui else 14,
             pady=(6, 12) if self.compact_ui else (10, 10),
         )
+        outer.grid_columnconfigure(0, weight=2, minsize=self._px(740))
+        outer.grid_columnconfigure(1, weight=1, minsize=self._px(330))
+        outer.grid_rowconfigure(1, weight=1)
+        main = tk.Frame(outer, bg=COLORS["window"])
+        self.left_form = main
+        main.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
         main.grid_columnconfigure(0, weight=1)
-        main.grid_rowconfigure(4, weight=1)
+        main.grid_rowconfigure(2, weight=1)
 
-        header = tk.Frame(main, bg=COLORS["window"])
+        header = tk.Frame(outer, bg=COLORS["window"])
         header.grid(
-            row=0, column=0, sticky="ew",
+            row=0, column=0, columnspan=2, sticky="ew",
             pady=(0, 6 if self.compact_ui else 10),
         )
         logo = tk.Label(
@@ -500,12 +407,12 @@ class UVToolApp:
             pady=(1 if self.compact_ui else 2, 0),
         )
 
-        _, _, file_body = self._create_card(
+        file_card, _, file_body = self._create_card(
             main,
-            1,
+            0,
             "目标脚本",
             "",
-            82 if self.compact_ui else 125,
+            76 if self.compact_ui else 115,
             None,
         )
         file_body.grid_columnconfigure(0, weight=1)
@@ -548,16 +455,14 @@ class UVToolApp:
         ).grid(row=0, column=2, padx=(8, 0))
         self._refresh_file_placeholder()
 
-        # At higher Windows DPI the Tk font metrics grow a little faster than
-        # the compact geometry scale.  Give this card a small amount of extra
-        # vertical room so the icon row never collides with the action bar.
+        # Two input rows; the icon selector lives in the resource card.
         config_card_height = (
-            (198 if self.compact_ui else 255)
+            (116 if self.compact_ui else 160)
             + round(max(0.0, self.ui_scale - 1.0) * 72)
         )
         config_card, _, config_body = self._create_card(
             main,
-            2,
+            1,
             "运行配置",
             "",
             config_card_height,
@@ -568,7 +473,7 @@ class UVToolApp:
         config_body.grid_columnconfigure(0, weight=1)
 
         config_left = tk.Frame(config_body, bg=COLORS["card"])
-        config_left.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
+        config_left.grid(row=0, column=0, sticky="nsew")
         config_left.grid_columnconfigure(
             0, minsize=self._px(110 if self.compact_ui else 130)
         )
@@ -580,7 +485,6 @@ class UVToolApp:
             3, minsize=self._px(self.form_action_width + 8)
         )
         config_left.grid_rowconfigure(1, minsize=self._px(8 if self.compact_ui else 12))
-        config_left.grid_rowconfigure(4, minsize=self._px(8 if self.compact_ui else 12))
 
         self._form_label(config_left, "Python 版本", 0, "python")
         compact_layout = self.window_width < 980
@@ -619,74 +523,16 @@ class UVToolApp:
             config_left, "重新识别", self.reanalyze_imports,
             icon_kind="refresh",
         ).grid(row=2, column=3, padx=(10, 0))
-        tk.Label(
-            config_left,
-            text=(
-                "支持空格、逗号或分号分隔，可手动修改。程序会过滤标准库和本地模块，"
-                "并自动将 serial 映射为 pyserial。"
-            ),
-            bg=COLORS["card"],
-            fg=COLORS["muted"],
-            font=(self.ui_font_family, 9),
-            anchor="w",
-            justify=tk.LEFT,
-            wraplength=self._px(330 if self.window_width < 980 else 560),
-        ).grid(row=3, column=1, columnspan=3, sticky="ew", pady=(6, 0))
 
-        self._form_label(config_left, "图标文件", 5, "image")
-        self.icon_entry = RoundedEntry(
-            config_left,
-            textvariable=self.icon_path_var,
-            height=self._px(self.form_control_height),
-            radius=self._px(9),
-            background=COLORS["card"],
-            parent_background=COLORS["card"],
-            border=COLORS["border"],
-            focus_border=COLORS["primary"],
-            foreground=COLORS["text"],
-            font=(self.ui_font_family, 9),
+        self.resource_panel = ResourcePanel(
+            main, COLORS, self._px, (self.ui_font_family, 9), self._make_button,
+            self._resource_script_path, self._resources_changed,
+            self.icon_path_var.set,
         )
-        self.icon_entry.grid(row=5, column=1, sticky="ew")
-        self._make_form_button(
-            config_left, "选择图标", self.browse_icon,
-            icon_kind="folder",
-        ).grid(row=5, column=2, padx=(10, 0))
-        self._make_form_button(
-            config_left, "清除图标", lambda: self.icon_path_var.set(""),
-            icon_kind="trash",
-        ).grid(row=5, column=3, padx=(10, 0))
-
-        option_width = 200 if compact_layout else 320
-        options = RoundedFrame(
-            config_body,
-            fill=COLORS["option_panel"],
-            background=COLORS["card"],
-            border=COLORS["border_soft"],
-            radius=self._px(8 if compact_layout else 10),
-            width=self._px(option_width),
-            height=self._px(145 if compact_layout else 180),
-        )
-        options.grid(row=0, column=1, sticky="nse")
-        option_box = options.content
-        tk.Label(
-            option_box,
-            text="打包选项",
-            bg=COLORS["option_panel"],
-            fg=COLORS["text"],
-            font=(self.ui_font_family, 10 if compact_layout else 11, "bold"),
-        ).pack(
-            anchor="w", padx=8 if compact_layout else 10,
-            pady=(7, 8) if compact_layout else (10, 12),
-        )
-        self._create_checkbox(
-            option_box,
-            "打包 EXE 时隐藏控制台",
-            self.no_console_var,
-            background=COLORS["option_panel"],
-        ).pack(anchor="w", padx=9 if compact_layout else 12)
+        self.resource_panel.grid(row=2, column=0, sticky="nsew", pady=(0, 6))
 
         action_card = RoundedFrame(
-            main,
+            outer,
             fill=COLORS["card"],
             background=COLORS["window"],
             border=COLORS["border_soft"],
@@ -694,10 +540,11 @@ class UVToolApp:
             height=self._layout_px(72 if self.compact_ui else 88),
         )
         action_card.grid(
-            row=3, column=0, sticky="ew",
-            pady=(0, 6 if self.compact_ui else 10),
+            row=2, column=0, columnspan=2, sticky="ew",
+            pady=(0, 0),
         )
         actions = tk.Frame(action_card.content, bg=COLORS["card"])
+        self.action_card = action_card
         actions.pack(
             fill=tk.BOTH,
             expand=True,
@@ -726,6 +573,10 @@ class UVToolApp:
         self.stop_btn.set_state(tk.DISABLED)
         self.stop_btn.grid(row=0, column=2, sticky="w", padx=(10, 0))
 
+        self.no_console_checkbox = self._create_checkbox(
+            actions, "打包时隐藏控制台", self.no_console_var, background=COLORS["card"])
+        self.no_console_checkbox.grid(row=0, column=3, sticky="w", padx=(20, 10))
+
         self.status_surface = RoundedFrame(
             actions,
             fill=COLORS["option_panel"],
@@ -735,12 +586,12 @@ class UVToolApp:
             width=self._px(245 if self.compact_ui else 300),
             height=self._px(36 if self.compact_ui else 44),
         )
-        self.status_surface.grid(row=0, column=3, sticky="e")
+        self.status_surface.grid(row=0, column=4, sticky="e")
         status_box = self.status_surface.content
         self.status_dot = tk.Canvas(
             status_box,
-            width=12 if self.compact_ui else 14,
-            height=12 if self.compact_ui else 14,
+            width=self._px(12 if self.compact_ui else 14),
+            height=self._px(12 if self.compact_ui else 14),
             bg=COLORS["option_panel"],
             highlightthickness=0, bd=0,
         )
@@ -749,12 +600,9 @@ class UVToolApp:
             padx=(8 if self.compact_ui else 10, 3 if self.compact_ui else 4),
             pady=6 if self.compact_ui else 8,
         )
-        self._status_dot_id = self.status_dot.create_oval(
-            2, 2,
-            10 if self.compact_ui else 13,
-            10 if self.compact_ui else 13,
-            fill=COLORS["success"], outline=""
-        )
+        dot_size = int(self.status_dot.cget("width"))
+        self._status_dot_id = draw_icon(self.status_dot, "dot", dot_size/2, dot_size/2,
+                                        dot_size, COLORS["success"], "status_dot")
         self.status_label = tk.Label(
             status_box,
             textvariable=self.status_var,
@@ -787,18 +635,20 @@ class UVToolApp:
             parent_background=COLORS["card"],
         )
         self.progress.grid(
-            row=1, column=0, columnspan=4, sticky="ew",
+            row=1, column=0, columnspan=5, sticky="ew",
             pady=(6 if self.compact_ui else 8, 0),
         )
 
         log_card, log_header, log_body = self._create_card(
-            main,
-            4,
+            outer,
+            1,
             "运行日志",
             "",
             204 if self.compact_ui else 260,
             None,
         )
+        self.log_card = log_card
+        log_card.grid_configure(column=1, sticky="nsew")
         if self.compact_ui:
             log_body.grid_configure(padx=8)
         log_card.content.grid_rowconfigure(1, weight=1)
@@ -897,55 +747,15 @@ class UVToolApp:
 
     def _position_file_entry_icon(self, _event=None):
         entry = self.file_entry
-        entry.delete("path_file_icon")
-        width = max(entry.winfo_width(), self._px(self.form_control_height))
         height = max(entry.winfo_height(), self._px(self.form_control_height))
-        icon_height = min(self._px(18), max(self._px(14), height - self._px(10)))
-        icon_width = self._px(12)
-        left = self._px(13)
-        top = (height - icon_height) / 2
-        right = left + icon_width
-        bottom = top + icon_height
-        fold_size = min(self._px(4), icon_width * 0.4, icon_height * 0.35)
-        fold_left = right - fold_size
-        fold_bottom = top + fold_size
-        entry.create_line(
-            left, top,
-            fold_left, top,
-            right, fold_bottom,
-            right, bottom,
-            left, bottom,
-            left, top,
-            fill=COLORS["muted"], width=max(1, self._px(1)),
-            joinstyle=tk.MITER,
-            tags="path_file_icon",
-        )
-        entry.create_line(
-            fold_left, top,
-            fold_left, fold_bottom,
-            right, fold_bottom,
-            fill=COLORS["muted"], width=max(1, self._px(1)),
-            joinstyle=tk.MITER,
-            tags="path_file_icon",
-        )
+        draw_icon(entry, "file", self._px(19), height/2, self._px(20),
+                  COLORS["muted"], "path_file_icon")
 
     def _position_file_entry_clear(self, _event=None):
         entry = self.file_entry
         entry.delete("path_clear")
-        center_x = entry.winfo_width() - self._px(19)
-        center_y = entry.winfo_height() / 2
-        entry.create_line(
-            center_x - self._px(5), center_y - self._px(5),
-            center_x + self._px(5), center_y + self._px(5),
-            fill=COLORS["muted"], width=self._px(2),
-            capstyle=tk.ROUND, tags="path_clear",
-        )
-        entry.create_line(
-            center_x + self._px(5), center_y - self._px(5),
-            center_x - self._px(5), center_y + self._px(5),
-            fill=COLORS["muted"], width=self._px(2),
-            capstyle=tk.ROUND, tags="path_clear",
-        )
+        draw_icon(entry, "close", entry.winfo_width()-self._px(19), entry.winfo_height()/2,
+                  self._px(16), COLORS["muted"], "path_clear")
         entry.tag_bind("path_clear", "<Button-1>", self._clear_script_path)
         entry.tag_bind("path_clear", "<Enter>", lambda _event: entry.configure(cursor="hand2"))
         entry.tag_bind("path_clear", "<Leave>", lambda _event: entry.configure(cursor="xterm"))
@@ -1031,9 +841,9 @@ class UVToolApp:
             "error": COLORS["danger"],
         }
         self.status_var.set(text)
-        self.status_dot.itemconfigure(
-            self._status_dot_id, fill=colors.get(kind, COLORS["success"])
-        )
+        size = int(self.status_dot.cget("width"))
+        self._status_dot_id = draw_icon(self.status_dot, "dot", size/2, size/2, size,
+                                        colors.get(kind, COLORS["success"]), "status_dot")
 
     def set_busy(
         self, busy, action_text="", status_text=None, status_kind="ready"
@@ -1043,6 +853,7 @@ class UVToolApp:
             self.run_btn.set_state(state)
             self.pack_btn.set_state(state)
             self.stop_btn.set_state(tk.NORMAL if busy else tk.DISABLED)
+            self.resource_panel.set_busy(busy)
             if busy:
                 running_text = (
                     "正在构建 EXE..." if action_text == "打包 EXE" else "正在运行脚本..."
@@ -1174,7 +985,7 @@ class UVToolApp:
         dialog.title("选择 Python 脚本")
         dialog.transient(self.root)
         dialog.resizable(True, True)
-        dialog.minsize(620, 360)
+        dialog.minsize(self._px(620), self._px(360))
         dialog.configure(bg=COLORS["window"])
         result = {"path": None}
 
@@ -1199,7 +1010,7 @@ class UVToolApp:
             bg=COLORS["card"],
             fg=COLORS["muted"],
             font=(self.ui_font_family, 9),
-            wraplength=720,
+            wraplength=self._px(720),
         ).pack(anchor="w", padx=16, pady=(3, 10))
 
         tree_frame = tk.Frame(content, bg=COLORS["card"])
@@ -1214,10 +1025,15 @@ class UVToolApp:
         tree.heading("#0", text="文件名")
         tree.heading("modified", text="修改时间")
         tree.heading("size", text="大小")
-        tree.column("#0", width=300, minwidth=180)
-        tree.column("modified", width=150, anchor="center")
-        tree.column("size", width=90, anchor="e")
-        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        metrics = tkfont.Font(root=dialog, font=(self.ui_font_family, 9))
+        tree.column("#0", width=self._px(300), minwidth=self._px(180))
+        tree.column("modified", width=max(self._px(150), metrics.measure("2000-00-00 00:00")+24),
+                    anchor="center", stretch=False)
+        tree.column("size", width=max(self._px(90), metrics.measure("1024.0 KB")+24),
+                    anchor="e", stretch=False)
+        scrollbar = RoundedScrollbar(
+            tree_frame, command=tree.yview, width=self._px(12), background=COLORS["card"],
+            track="#F3F6FA", thumb="#C9D2DE", hover_thumb="#98A2B3")
         tree.configure(yscrollcommand=scrollbar.set)
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -1264,8 +1080,8 @@ class UVToolApp:
         dialog.protocol("WM_DELETE_WINDOW", cancel)
 
         dialog.update_idletasks()
-        width = max(680, dialog.winfo_reqwidth())
-        height = max(410, dialog.winfo_reqheight())
+        width = min(max(self._px(680), dialog.winfo_reqwidth()), dialog.winfo_screenwidth()-80)
+        height = min(max(self._px(410), dialog.winfo_reqheight()), dialog.winfo_screenheight()-80)
         x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - width) // 2)
         y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - height) // 2)
         dialog.geometry(f"{width}x{height}+{x}+{y}")
@@ -1273,6 +1089,12 @@ class UVToolApp:
         tree.focus_set()
         self.root.wait_window(dialog)
         return result["path"]
+
+    def _resource_script_path(self):
+        return normalize_path_text(self.file_path_var.get()) or self._selected_script_path
+
+    def _resources_changed(self, mappings):
+        self.resource_mappings = list(mappings)
 
     def browse_icon(self):
         icon_path = filedialog.askopenfilename(
@@ -1349,19 +1171,29 @@ class UVToolApp:
         script_path = self.validate_script()
         if not script_path or not self.check_uv():
             return
-        icon_path = self.validate_icon()
-        if icon_path is None:
+        try:
+            self.resource_panel.prepare(script_path)
+            icon_path = self.validate_icon()
+            if icon_path is None:
+                return
+            resources = validate_resources(self.resource_mappings, icon_path, script_path)
+            command = build_pack_command(
+                script_path, self.get_python_version(), self.deps_var.get(),
+                self.no_console_var.get(), icon_path, resources,
+            )
+        except (ValueError, OSError) as exc:
+            messagebox.showerror("资源配置错误", str(exc))
             return
-        command = build_pack_command(
-            script_path, self.get_python_version(), self.deps_var.get(),
-            self.no_console_var.get(), icon_path,
-        )
-        self.start_command(command, "打包 EXE", script_path, icon_path)
+        self.start_command(command, "打包 EXE", script_path, icon_path, resources)
 
-    def start_command(self, command, action_name, script_path, icon_path=""):
+    def start_command(self, command, action_name, script_path, icon_path="", resources=()):
+        resources = tuple(resources)
         workdir = os.path.dirname(os.path.abspath(script_path)) or None
         context = None
-        if action_name == "打包 EXE" and icon_path:
+        if action_name == "打包 EXE" and resources:
+            context = partial(resource_build_context, script_path=script_path, resources=resources,
+                              icon_path=icon_path, warning_callback=self.safe_log)
+        elif action_name == "打包 EXE" and icon_path:
             context = partial(
                 tkinter_icon_runtime_hook,
                 icon_path=icon_path,
@@ -1373,24 +1205,27 @@ class UVToolApp:
             command=command,
             cwd=workdir,
             on_output=self.safe_log,
-            on_started=partial(self._command_started, action_name, workdir, icon_path),
-            on_finished=partial(self._command_finished, action_name, script_path, icon_path),
+            on_started=partial(self._command_started, action_name, workdir, icon_path, resources=resources),
+            on_finished=partial(self._command_finished, action_name, script_path, icon_path, resources=resources),
             command_context=context,
         )
         if not started:
             messagebox.showwarning("提示", "当前已有任务正在执行。")
             return
 
-    def _command_started(self, action_name, workdir, icon_path, actual_command):
+    def _command_started(self, action_name, workdir, icon_path, actual_command, resources=()):
         self.safe_log(f"\n========== 开始 {action_name} ==========")
         if action_name == "打包 EXE":
             self.safe_log(f"[*] EXE图标: {icon_path or '默认'}")
+            self.safe_log("[*] 附加资源映射：" + ("" if resources else "无"))
+            for resource in resources:
+                self.safe_log(f"    {resource.source} -> {resource.destination}")
         self.safe_log(f"工作目录: {workdir}\n")
         if action_name == "打包 EXE" and icon_path:
             self.safe_log("[*] 已启用 Tkinter 窗口默认图标同步（无需修改目标脚本）。")
         self.safe_log(f"执行命令: {format_command(actual_command)}")
 
-    def _command_finished(self, action_name, script_path, icon_path, result: ProcessResult):
+    def _command_finished(self, action_name, script_path, icon_path, result: ProcessResult, resources=()):
         final_status = "任务已停止" if self._stop_requested else "就绪"
         final_kind = "warning" if self._stop_requested else "ready"
         if result.error is not None:
@@ -1407,7 +1242,7 @@ class UVToolApp:
         elif result.return_code == 0:
             self.safe_log(f"\n========== {action_name} 成功完成! ==========\n")
             if action_name == "打包 EXE":
-                self._log_cleanup_result(cleanup_pack_artifacts(script_path, icon_path))
+                self._log_cleanup_result(cleanup_pack_artifacts(script_path, icon_path, resources))
                 final_status = "构建完成"
             else:
                 final_status = "运行完成"
@@ -1428,6 +1263,8 @@ class UVToolApp:
             self.safe_log("[*] 已自动清理打包中间文件：")
             for item in result.removed:
                 self.safe_log(f"    - {item}")
+        elif result.warnings:
+            self.safe_log("[*] 未删除中间文件；部分路径受资源保护或清理失败，原因如下。")
         else:
             self.safe_log("[*] 未发现需要清理的 build/.spec 中间文件。")
         for warning in result.warnings:
