@@ -1,6 +1,6 @@
 """Application-wide constants and static compatibility data."""
 
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.5.1"
 APP_TITLE = f"Python运行打包工具 V{APP_VERSION}"
 DEFAULT_PYTHON = "3.8.20"
 
@@ -54,6 +54,9 @@ if sys.platform == "win32" and hasattr(sys, "_MEIPASS"):
     else:
         runtime_ico_path = os.path.join(sys._MEIPASS, {TK_ICON_RESOURCE_NAME!r})
         original_init = tk.Tk.__init__
+        original_iconbitmap = getattr(tk.Tk, "iconbitmap", None)
+        original_iconphoto = getattr(tk.Tk, "iconphoto", None)
+
         def init_with_runtime_icon(self, *args, **kwargs):
             original_init(self, *args, **kwargs)
             if getattr(self, "_tkloaded", False):
@@ -63,5 +66,28 @@ if sys.platform == "win32" and hasattr(sys, "_MEIPASS"):
                 except (tk.TclError, OSError) as exc:
                     warnings.warn("Unable to set bundled Tk window icon: " + str(exc),
                                   RuntimeWarning)
+                else:
+                    self._python_tool_icon_active = True
+
+        def keep_runtime_bitmap(self, bitmap=None, default=None):
+            if getattr(self, "_python_tool_icon_active", False):
+                if default is not None:
+                    default = runtime_ico_path
+                elif bitmap is not None:
+                    bitmap = runtime_ico_path
+            return original_iconbitmap(self, bitmap, default)
+
+        def keep_runtime_photo(self, default=False, *images):
+            if not images or not getattr(self, "_python_tool_icon_active", False):
+                return original_iconphoto(self, default, *images)
+            if default:
+                original_iconbitmap(self, default=runtime_ico_path)
+            else:
+                original_iconbitmap(self, runtime_ico_path)
+
         tk.Tk.__init__ = init_with_runtime_icon
+        # Protect root windows only. Toplevel keeps its own icon methods.
+        if original_iconbitmap is not None and original_iconphoto is not None:
+            tk.Tk.iconbitmap = tk.Tk.wm_iconbitmap = keep_runtime_bitmap
+            tk.Tk.iconphoto = tk.Tk.wm_iconphoto = keep_runtime_photo
 '''

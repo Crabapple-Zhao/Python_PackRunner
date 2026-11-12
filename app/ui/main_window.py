@@ -1222,7 +1222,7 @@ class UVToolApp:
                 self.safe_log(f"    {resource.source} -> {resource.destination}")
         self.safe_log(f"工作目录: {workdir}\n")
         if action_name == "打包 EXE" and icon_path:
-            self.safe_log("[*] 已启用 Tkinter 窗口默认图标同步（无需修改目标脚本）。")
+            self.safe_log("[*] 已启用 Windows Tkinter 主窗口图标同步。")
         self.safe_log(f"执行命令: {format_command(actual_command)}")
 
     def _command_finished(self, action_name, script_path, icon_path, result: ProcessResult, resources=()):

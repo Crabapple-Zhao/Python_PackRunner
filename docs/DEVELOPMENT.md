@@ -60,4 +60,4 @@ python tests/resource_collection_check.py
 
 需要过滤缓存或构建产物的目录会复制到工具临时目录中，副本在整个构建过程中保持有效，结束后清理。用户源目录不作为临时目录删除。
 
-选择程序图标时，保留 `--icon` 设置 EXE 文件图标，并将 ICO 副本以 `python_tool_window_icon.ico` 收录。Tkinter runtime hook 从 `sys._MEIPASS` 加载该 ICO。临时图标、hook 和资源副本均由构建上下文管理。
+选择程序图标时，保留 `--icon` 设置 EXE 文件图标，并将 ICO 副本以 `python_tool_window_icon.ico` 收录。Tkinter runtime hook 从 `sys._MEIPASS` 加载该 ICO。成功加载后，`Tk` 主窗口通过 `iconbitmap` 或 `iconphoto` 设置图标时会继续使用所选 ICO。临时图标、hook 和资源副本均由构建上下文管理。

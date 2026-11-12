@@ -311,7 +311,7 @@ class ResourcePanel(RoundedFrame):
             if self.icon_mode == "none":
                 text = "不设置 EXE 文件图标；目标代码仍可能自行设置窗口和任务栏图标。"
             elif icon:
-                text = "图标用于 EXE 文件和默认 Tk 窗口；目录按目标路径收录，保留内部层级。"
+                text = "图标用于 EXE 文件和 Tk 主窗口。目录按目标路径收录，保留内部层级。"
             else:
                 text = "未发现 ICO，使用默认 EXE 图标；可添加包含资源及 ICO 的目录。"
             self.error_text = ""

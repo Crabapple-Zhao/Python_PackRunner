@@ -2,13 +2,13 @@
 
 ![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
 ![uv](https://img.shields.io/badge/%E5%BC%95%E6%93%8E-uv-de5c3c)
-![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V2.5.0-brightgreen)
+![Version](https://img.shields.io/badge/%E7%89%88%E6%9C%AC-V2.5.1-brightgreen)
 
 基于 Tkinter 和 [uv](https://docs.astral.sh/uv/) 的 Python 脚本运行与 EXE 打包工具，支持依赖识别、Python 版本选择和资源目录打包。
 
 ## 软件界面
 
-![Python运行打包工具界面](docs/images/python-tool-v2.5.0.png)
+![Python运行打包工具 V2.5.1 界面](docs/images/python-tool-v2.5.1.png)
 
 左侧配置目标脚本、依赖和资源，右侧查看日志，底部运行、打包或停止任务。
 
@@ -19,7 +19,7 @@
 - **Python 版本选择**：支持选择 Python 3.8.20 至 3.13，默认使用 3.8.20。
 - **隔离运行**：通过 uv 管理 Python 环境和依赖，无需手动创建虚拟环境。
 - **EXE 打包**：生成单文件 EXE，可选择是否隐藏控制台窗口。
-- **资源与图标**：递归收录图片、配置、字体等资源目录，支持编辑包内路径，并设置 EXE 和 Tkinter 默认窗口图标。
+- **资源与图标**：递归收录图片、配置、字体等资源目录，支持编辑包内路径，并设置 EXE 和 Tkinter 主窗口图标。
 - **日志与任务控制**：实时显示运行和打包输出，支持复制、清空日志和停止任务；Windows 下停止任务时同时结束相关子进程。
 - **界面缩放**：支持窗口缩放和高 DPI 显示，资源较多时可在列表内滚动查看。
 - **构建清理**：打包成功后清理当前脚本对应的中间文件，保留最终 EXE 和用户源资源。
@@ -107,13 +107,13 @@ logo_path = resource_root / "doc" / "logo" / "logo.png"
 
 工具会扫描所选资源目录中的 ICO：
 
-- 只有一个 ICO 时，自动用于 EXE 文件图标和 Tkinter 默认窗口图标。
+- 只有一个 ICO 时，自动用于 EXE 文件图标和 Tkinter 主窗口图标。
 - 有多个 ICO 时，需要选择其中一个，或选择 **不设置 EXE 图标**。
 - 没有 ICO，或选择不设置图标时，使用默认 EXE 文件图标。
 
 目录内容变化后，可点击 **重新扫描**。资源目录中的原始图标仍按配置的包内路径收录。
 
-EXE 文件图标和程序窗口图标可能来自不同设置。目标程序自行调用 `iconbitmap` 或 `iconphoto` 时，以目标程序的设置为准；**不设置 EXE 图标**不会阻止目标程序加载自己的窗口图标。所选图标仅用于被打包的程序，不会改变打包工具自身的图标。
+所选 ICO 优先用于 Windows 下的 Tkinter 主窗口，即使目标程序启动后自行设置窗口图标。选择 **不设置 EXE 图标** 时，窗口图标由目标程序决定。
 
 V2.0.1 起支持 Windows 10 下的 Tkinter 窗口图标同步。已经生成的 EXE 需要重新打包后，才会应用新的图标设置。
 
